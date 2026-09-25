@@ -1,11 +1,33 @@
+# ==============================================================================
+# Application Environments: Dev, QA, Prod
+# ==============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: storeapp
+  name: dev
   labels:
-    name: storeapp
+    environment: dev
     app.kubernetes.io/part-of: storeapp
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qa
+  labels:
+    environment: qa
+    app.kubernetes.io/part-of: storeapp
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+  labels:
+    environment: prod
+    app.kubernetes.io/part-of: storeapp
+---
+# ==============================================================================
+# Supporting Infrastructure Namespaces
+# ==============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:

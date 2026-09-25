@@ -1,0 +1,48 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <servers>
+        <!-- Nexus Maven Releases Repository -->
+        <server>
+            <id>nexus-releases</id>
+            <username>${env.NEXUS_USER}</username>
+            <password>${env.NEXUS_PASS}</password>
+        </server>
+
+        <!-- Nexus Maven Snapshots Repository -->
+        <server>
+            <id>nexus-snapshots</id>
+            <username>${env.NEXUS_USER}</username>
+            <password>${env.NEXUS_PASS}</password>
+        </server>
+    </servers>
+
+    <mirrors>
+        <!-- Mirror central repository through local cluster Nexus -->
+        <mirror>
+            <id>nexus-central-mirror</id>
+            <mirrorOf>central</mirrorOf>
+            <name>Nexus Central Mirror</name>
+            <url>http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-public/</url>
+        </mirror>
+    </mirrors>
+
+    <profiles>
+        <profile>
+            <id>nexus</id>
+            <repositories>
+                <repository>
+                    <id>nexus-central</id>
+                    <url>http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-public/</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </repository>
+            </repositories>
+        </profile>
+    </profiles>
+
+    <activeProfiles>
+        <activeProfile>nexus</activeProfile>
+    </activeProfiles>
+</settings>
