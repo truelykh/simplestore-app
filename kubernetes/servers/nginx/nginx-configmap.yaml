@@ -9,62 +9,52 @@ data:
   nginx.conf: |
     events { worker_connections 1024; }
     http {
-        upstream frontend_svc {
-            server frontend-svc.storeapp.svc.cluster.local:80;
-        }
-        upstream user_svc {
-            server user-svc.storeapp.svc.cluster.local:8080;
-        }
-        upstream product_svc {
-            server product-svc.storeapp.svc.cluster.local:8080;
-        }
-        upstream order_svc {
-            server order-svc.storeapp.svc.cluster.local:8080;
-        }
-        upstream payment_svc {
-            server payment-svc.storeapp.svc.cluster.local:8080;
-        }
-        upstream notification_svc {
-            server notification-svc.storeapp.svc.cluster.local:8080;
-        }
+        # Use Kubernetes CoreDNS resolver for dynamic runtime resolution
+        resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;
 
         server {
             listen 80;
 
-            # Frontend static UI
+            # Frontend static UI (Dynamic resolution prevents startup crash if service not ready)
             location / {
-                proxy_pass http://frontend_svc;
+                set $frontend_upstream "http://frontend-svc.storeapp.svc.cluster.local:80";
+                proxy_pass $frontend_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
             # Backend Microservices APIs
             location /api/users {
-                proxy_pass http://user_svc;
+                set $user_upstream "http://user-svc.storeapp.svc.cluster.local:8080";
+                proxy_pass $user_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
             location /api/products {
-                proxy_pass http://product_svc;
+                set $product_upstream "http://product-svc.storeapp.svc.cluster.local:8080";
+                proxy_pass $product_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
             location /api/orders {
-                proxy_pass http://order_svc;
+                set $order_upstream "http://order-svc.storeapp.svc.cluster.local:8080";
+                proxy_pass $order_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
             location /api/payments {
-                proxy_pass http://payment_svc;
+                set $payment_upstream "http://payment-svc.storeapp.svc.cluster.local:8080";
+                proxy_pass $payment_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
 
             location /api/notifications {
-                proxy_pass http://notification_svc;
+                set $notif_upstream "http://notification-svc.storeapp.svc.cluster.local:8080";
+                proxy_pass $notif_upstream;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
             }
