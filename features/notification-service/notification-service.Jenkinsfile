@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        SERVICE_NAME = 'payment-service'
+        SERVICE_NAME = 'notification-service'
         ENVIRONMENT = 'dev'
         APP_VERSION = "${ENVIRONMENT}-${BUILD_NUMBER}"
 
@@ -25,11 +25,23 @@ pipeline {
             }
         }
 
+        stage('Verify Environment') {
+            steps {
+                sh '''
+                    java -version
+                    mvn -version
+                    docker --version
+                    kubectl version --client
+                '''
+            }
+        }
+
         stage('Build JAR') {
             steps {
                 dir("features/${SERVICE_NAME}") {
                     sh 'mvn clean package -DskipTests'
                     sh 'test -f target/app.jar'
+                    sh 'ls -lh target/app.jar'
                 }
             }
         }
@@ -116,7 +128,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'good',
-                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER} - DEV deployment completed"
+                message: "SUCCESS: ${SERVICE_NAME} | Build #${BUILD_NUMBER} | ${ENVIRONMENT}:${BUILD_NUMBER} | DEV deployment completed"
             )
         }
 
@@ -124,12 +136,13 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'danger',
-                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - DEV"
+                message: "FAILED: ${SERVICE_NAME} | Build #${BUILD_NUMBER} | DEV"
             )
         }
 
         always {
             sh 'docker logout ${NEXUS_REGISTRY} || true'
+
             cleanWs(
                 deleteDirs: true,
                 notFailBuild: true

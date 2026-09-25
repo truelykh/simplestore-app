@@ -6,12 +6,11 @@ pipeline {
     }
 
     environment {
-        SERVICE_NAME = 'payment-service'
+        SERVICE_NAME = 'frontend'
         ENVIRONMENT = 'dev'
-        APP_VERSION = "${ENVIRONMENT}-${BUILD_NUMBER}"
+        APP_VERSION = "${BUILD_NUMBER}"
 
         NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
-        NEXUS_MAVEN_URL = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-releases'
         NEXUS_CRED_ID = 'nexus-credentials'
 
         KUBE_NAMESPACE = 'dev'
@@ -25,32 +24,11 @@ pipeline {
             }
         }
 
-        stage('Build JAR') {
+        stage('Build Frontend') {
             steps {
                 dir("features/${SERVICE_NAME}") {
-                    sh 'mvn clean package -DskipTests'
-                    sh 'test -f target/app.jar'
-                }
-            }
-        }
-
-        stage('Upload JAR to Nexus') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: env.NEXUS_CRED_ID,
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )
-                ]) {
-                    sh '''
-                        curl --fail \
-                             --show-error \
-                             --silent \
-                             -u "$NEXUS_USER:$NEXUS_PASS" \
-                             --upload-file "$WORKSPACE/features/$SERVICE_NAME/target/app.jar" \
-                             "$NEXUS_MAVEN_URL/com/simplestore/$SERVICE_NAME/$ENVIRONMENT/$SERVICE_NAME-$APP_VERSION.jar"
-                    '''
+                    sh 'npm ci'
+                    sh 'npm run build'
                 }
             }
         }
@@ -74,11 +52,11 @@ pipeline {
                     dir("features/${SERVICE_NAME}") {
                         sh '''
                             docker build \
-                                -t "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$BUILD_NUMBER" \
+                                -t "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$APP_VERSION" \
                                 .
 
                             docker push \
-                                "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$BUILD_NUMBER"
+                                "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$APP_VERSION"
                         '''
                     }
                 }
@@ -89,7 +67,7 @@ pipeline {
             steps {
                 script {
                     def manifest = "kubernetes/microservices/${SERVICE_NAME}/deployment.yaml"
-                    def image = "${NEXUS_REGISTRY}/${SERVICE_NAME}/${ENVIRONMENT}:${BUILD_NUMBER}"
+                    def image = "${NEXUS_REGISTRY}/${SERVICE_NAME}/${ENVIRONMENT}:${APP_VERSION}"
 
                     sh """
                         sed -i.bak \
@@ -116,7 +94,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'good',
-                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER} - DEV deployment completed"
+                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${APP_VERSION} - CI + CD DEV completed"
             )
         }
 
@@ -124,7 +102,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'danger',
-                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - DEV"
+                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER}"
             )
         }
 

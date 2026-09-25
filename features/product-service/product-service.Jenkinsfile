@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        SERVICE_NAME = 'payment-service'
+        SERVICE_NAME = 'product-service'
         ENVIRONMENT = 'dev'
         APP_VERSION = "${ENVIRONMENT}-${BUILD_NUMBER}"
 
@@ -116,7 +116,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'good',
-                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER} - DEV deployment completed"
+                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER}"
             )
         }
 
@@ -124,7 +124,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'danger',
-                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - DEV"
+                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER}"
             )
         }
 

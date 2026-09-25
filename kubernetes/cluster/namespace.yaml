@@ -1,6 +1,3 @@
-# ==============================================================================
-# Application Environments: Dev, QA, Prod
-# ==============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -8,6 +5,7 @@ metadata:
   labels:
     environment: dev
     app.kubernetes.io/part-of: storeapp
+
 ---
 apiVersion: v1
 kind: Namespace
@@ -16,6 +14,7 @@ metadata:
   labels:
     environment: qa
     app.kubernetes.io/part-of: storeapp
+
 ---
 apiVersion: v1
 kind: Namespace
@@ -24,16 +23,15 @@ metadata:
   labels:
     environment: prod
     app.kubernetes.io/part-of: storeapp
+
 ---
-# ==============================================================================
-# Supporting Infrastructure Namespaces
-# ==============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:
   name: nginx
   labels:
     name: nginx
+
 ---
 apiVersion: v1
 kind: Namespace
@@ -41,6 +39,7 @@ metadata:
   name: jenkins
   labels:
     name: jenkins
+
 ---
 apiVersion: v1
 kind: Namespace
@@ -48,6 +47,7 @@ metadata:
   name: nexus
   labels:
     name: nexus
+
 ---
 apiVersion: v1
 kind: Namespace

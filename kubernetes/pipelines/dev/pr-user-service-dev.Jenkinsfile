@@ -1,68 +1,109 @@
-// ==============================================================================
-// PR Pipeline: user-service -> dev branch (QA Environment)
-// Target Environment: QA (Namespace: qa)
-// ==============================================================================
 pipeline {
     agent any
 
+    triggers {
+        githubPush()
+    }
+
     environment {
-        SERVICE_NAME    = 'user-service'
-        NEXUS_REGISTRY  = 'nexus-svc.nexus.svc.cluster.local:8082'
-        NEXUS_MAVEN_URL = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-snapshots'
-        NEXUS_CRED_ID   = 'nexus-credentials'
-        KUBE_NAMESPACE  = 'qa'
-        APP_VERSION     = "qa-${BUILD_NUMBER}" // Incremental tag - NO latest tag
+        SERVICE_NAME = 'user-service'
+        ENVIRONMENT = 'qa'
+        APP_VERSION = "${ENVIRONMENT}-${BUILD_NUMBER}"
+
+        NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
+        NEXUS_MAVEN_URL = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-releases'
+        NEXUS_CRED_ID = 'nexus-credentials'
+
+        KUBE_NAMESPACE = 'qa'
     }
 
     stages {
-        stage('PR Validation: Test & Package') {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build JAR') {
             steps {
                 dir("features/${SERVICE_NAME}") {
-                    echo "Validating PR to dev for ${SERVICE_NAME}..."
-                    sh 'mvn clean package -DskipTests=false'
+                    sh 'mvn clean package -DskipTests'
+                    sh 'test -f target/app.jar'
                 }
             }
         }
 
-        stage('Publish JAR to Nexus') {
+        stage('Upload JAR to Nexus') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.NEXUS_CRED_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    echo "Publishing ${SERVICE_NAME} JAR (v${APP_VERSION}) to Nexus..."
-                    sh """
-                        curl -u ${NEXUS_USER}:${NEXUS_PASS} \
-                             --upload-file features/${SERVICE_NAME}/target/app.jar \
-                             ${NEXUS_MAVEN_URL}/com/simplestore/${SERVICE_NAME}/${APP_VERSION}/${SERVICE_NAME}-${APP_VERSION}.jar
-                    """
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.NEXUS_CRED_ID,
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
+                    sh '''
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/$SERVICE_NAME/target/app.jar" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/$SERVICE_NAME/$ENVIRONMENT/$SERVICE_NAME-$APP_VERSION.jar"
+                    '''
                 }
             }
         }
 
-        stage('Publish Image to Nexus Docker Registry') {
+        stage('Build & Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.NEXUS_CRED_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh "echo ${NEXUS_PASS} | docker login -u ${NEXUS_USER} --password-stdin ${NEXUS_REGISTRY}"
-                    
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.NEXUS_CRED_ID,
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
+                    sh '''
+                        echo "$NEXUS_PASS" | docker login \
+                            "$NEXUS_REGISTRY" \
+                            -u "$NEXUS_USER" \
+                            --password-stdin
+                    '''
+
                     dir("features/${SERVICE_NAME}") {
-                        def imageName = "${NEXUS_REGISTRY}/${SERVICE_NAME}:${APP_VERSION}"
-                        echo "Building and pushing Docker image with incremental tag: ${imageName}"
-                        sh "docker build -t ${imageName} ."
-                        sh "docker push ${imageName}"
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/$SERVICE_NAME/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
                     }
                 }
             }
         }
 
-        stage('Deploy to QA Kubernetes') {
+        stage('Deploy to QA') {
             steps {
                 script {
                     def manifest = "kubernetes/microservices/${SERVICE_NAME}/deployment.yaml"
-                    def fullImage = "${NEXUS_REGISTRY}/${SERVICE_NAME}:${APP_VERSION}"
-                    
-                    echo "Deploying ${SERVICE_NAME} to QA namespace using image: ${fullImage}"
+                    def image = "${NEXUS_REGISTRY}/${SERVICE_NAME}/${ENVIRONMENT}:${BUILD_NUMBER}"
+
                     sh """
-                        sed -i.bak 's|image: .*|image: ${fullImage}|g' ${manifest}
-                        kubectl apply -f ${manifest} -n ${KUBE_NAMESPACE}
-                        kubectl rollout status deployment/${SERVICE_NAME} -n ${KUBE_NAMESPACE} --timeout=120s
+                        sed -i.bak \
+                            's|image: .*|image: ${image}|g' \
+                            ${manifest}
+
+                        kubectl apply \
+                            -f ${manifest} \
+                            -n ${KUBE_NAMESPACE}
+
+                        kubectl rollout status \
+                            deployment/${SERVICE_NAME} \
+                            -n ${KUBE_NAMESPACE} \
+                            --timeout=120s
                     """
                 }
             }
@@ -70,9 +111,29 @@ pipeline {
     }
 
     post {
+
+        success {
+            slackSend(
+                channel: '#devopsupdates',
+                color: 'good',
+                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER} - QA deployment completed"
+            )
+        }
+
+        failure {
+            slackSend(
+                channel: '#devopsupdates',
+                color: 'danger',
+                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - QA"
+            )
+        }
+
         always {
             sh 'docker logout ${NEXUS_REGISTRY} || true'
-            cleanWs notFailBuild: true
+            cleanWs(
+                deleteDirs: true,
+                notFailBuild: true
+            )
         }
     }
 }

@@ -12,8 +12,8 @@ pipeline {
 
         NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
         NEXUS_MAVEN_URL = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-releases'
-        NEXUS_CRED_ID = 'nexus-credentials'
 
+        NEXUS_CRED_ID = 'nexus-credentials'
         KUBE_NAMESPACE = 'dev'
     }
 
@@ -116,7 +116,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'good',
-                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER} - DEV deployment completed"
+                message: "SUCCESS: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - ${ENVIRONMENT}:${BUILD_NUMBER}"
             )
         }
 
@@ -124,7 +124,7 @@ pipeline {
             slackSend(
                 channel: '#devopsupdates',
                 color: 'danger',
-                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER} - DEV"
+                message: "FAILED: ${SERVICE_NAME} - Build #${BUILD_NUMBER}"
             )
         }
 

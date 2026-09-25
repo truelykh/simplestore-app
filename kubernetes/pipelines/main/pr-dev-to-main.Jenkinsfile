@@ -1,62 +1,77 @@
-// ==============================================================================
-// PR Pipeline: dev -> main branch (Production Release)
-// Trigger: Pull Request raised to 'main' from 'dev' branch
-// ==============================================================================
 pipeline {
     agent any
 
+    triggers {
+        githubPush()
+    }
+
     environment {
-        NEXUS_REGISTRY   = 'nexus-svc.nexus.svc.cluster.local:8082'
-        NEXUS_MAVEN_URL  = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-releases'
-        NEXUS_CRED_ID    = 'nexus-credentials'
-        KUBE_NAMESPACE   = 'prod'
-        
-        // Strict Incremental Release Tagging (NO latest tag)
-        APP_VERSION      = "prod-${BUILD_NUMBER}"
+        ENVIRONMENT = 'prod'
+
+        NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
+        NEXUS_MAVEN_URL = 'http://nexus-svc.nexus.svc.cluster.local:8081/repository/maven-releases'
+        NEXUS_CRED_ID = 'nexus-credentials'
+
+        KUBE_NAMESPACE = 'prod'
     }
 
     stages {
-        // ----------------------------------------------------------------------
-        // STAGE 1: Full Build & Test Verification
-        // ----------------------------------------------------------------------
-        stage('Production Build & Test Verification') {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Production Build & Test') {
             parallel {
+
                 stage('User Service') {
                     steps {
                         dir('features/user-service') {
-                            sh 'mvn clean package -DskipTests=false --settings ../../kubernetes/pipelines/settings.xml'
+                            sh 'mvn clean package -DskipTests'
+                            sh 'test -f target/app.jar'
                         }
                     }
                 }
+
                 stage('Product Service') {
                     steps {
                         dir('features/product-service') {
-                            sh 'mvn clean package -DskipTests=false --settings ../../kubernetes/pipelines/settings.xml'
+                            sh 'mvn clean package -DskipTests'
+                            sh 'test -f target/app.jar'
                         }
                     }
                 }
+
                 stage('Order Service') {
                     steps {
                         dir('features/order-service') {
-                            sh 'mvn clean package -DskipTests=false --settings ../../kubernetes/pipelines/settings.xml'
+                            sh 'mvn clean package -DskipTests'
+                            sh 'test -f target/app.jar'
                         }
                     }
                 }
+
                 stage('Payment Service') {
                     steps {
                         dir('features/payment-service') {
-                            sh 'mvn clean package -DskipTests=false --settings ../../kubernetes/pipelines/settings.xml'
+                            sh 'mvn clean package -DskipTests'
+                            sh 'test -f target/app.jar'
                         }
                     }
                 }
+
                 stage('Notification Service') {
                     steps {
                         dir('features/notification-service') {
-                            sh 'mvn clean package -DskipTests=false --settings ../../kubernetes/pipelines/settings.xml'
+                            sh 'mvn clean package -DskipTests'
+                            sh 'test -f target/notification-service.war'
                         }
                     }
                 }
-                stage('Frontend App') {
+
+                stage('Frontend') {
                     steps {
                         dir('features/frontend') {
                             sh 'npm ci'
@@ -67,76 +82,174 @@ pipeline {
             }
         }
 
-        // ----------------------------------------------------------------------
-        // STAGE 2: Publish Official Release JARs to Nexus Maven Releases
-        // ----------------------------------------------------------------------
-        stage('Publish Release JARs to Nexus') {
+        stage('Upload Backend Artifacts to Nexus') {
             steps {
-                withCredentials([usernamePassword(credentialsId: env.NEXUS_CRED_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    script {
-                        def services = ['user-service', 'product-service', 'order-service', 'payment-service', 'notification-service']
-                        for (service in services) {
-                            echo "Publishing official release JAR for ${service} (v${APP_VERSION}) to Nexus..."
-                            sh """
-                                curl -u ${NEXUS_USER}:${NEXUS_PASS} \
-                                     --upload-file features/${service}/target/app.jar \
-                                     ${NEXUS_MAVEN_URL}/com/simplestore/${service}/${APP_VERSION}/${service}-${APP_VERSION}.jar
-                            """
-                        }
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.NEXUS_CRED_ID,
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
+                    sh '''
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/user-service/target/app.jar" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/user-service/$ENVIRONMENT/user-service-$ENVIRONMENT-$BUILD_NUMBER.jar"
+
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/product-service/target/app.jar" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/product-service/$ENVIRONMENT/product-service-$ENVIRONMENT-$BUILD_NUMBER.jar"
+
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/order-service/target/app.jar" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/order-service/$ENVIRONMENT/order-service-$ENVIRONMENT-$BUILD_NUMBER.jar"
+
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/payment-service/target/app.jar" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/payment-service/$ENVIRONMENT/payment-service-$ENVIRONMENT-$BUILD_NUMBER.jar"
+
+                        curl --fail \
+                             --show-error \
+                             --silent \
+                             -u "$NEXUS_USER:$NEXUS_PASS" \
+                             --upload-file "$WORKSPACE/features/notification-service/target/notification-service.war" \
+                             "$NEXUS_MAVEN_URL/com/simplestore/notification-service/$ENVIRONMENT/notification-service-$ENVIRONMENT-$BUILD_NUMBER.war"
+                    '''
+                }
+            }
+        }
+
+        stage('Build & Push Production Images') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.NEXUS_CRED_ID,
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
+
+                    sh '''
+                        echo "$NEXUS_PASS" | docker login \
+                            "$NEXUS_REGISTRY" \
+                            -u "$NEXUS_USER" \
+                            --password-stdin
+                    '''
+
+                    dir('features/frontend') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/frontend/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/frontend/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
+                    }
+
+                    dir('features/user-service') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/user-service/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/user-service/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
+                    }
+
+                    dir('features/product-service') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/product-service/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/product-service/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
+                    }
+
+                    dir('features/order-service') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/order-service/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/order-service/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
+                    }
+
+                    dir('features/payment-service') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/payment-service/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/payment-service/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
+                    }
+
+                    dir('features/notification-service') {
+                        sh '''
+                            docker build \
+                                -t "$NEXUS_REGISTRY/notification-service/$ENVIRONMENT:$BUILD_NUMBER" \
+                                .
+
+                            docker push \
+                                "$NEXUS_REGISTRY/notification-service/$ENVIRONMENT:$BUILD_NUMBER"
+                        '''
                     }
                 }
             }
         }
 
-        // ----------------------------------------------------------------------
-        // STAGE 3: Build & Push Production Images to Nexus Docker Registry
-        // ----------------------------------------------------------------------
-        stage('Publish Production Docker Images') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: env.NEXUS_CRED_ID, usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh "echo ${NEXUS_PASS} | docker login -u ${NEXUS_USER} --password-stdin ${NEXUS_REGISTRY}"
-
-                    script {
-                        def allComponents = ['frontend', 'user-service', 'product-service', 'order-service', 'payment-service', 'notification-service']
-                        for (comp in allComponents) {
-                            def fullImageName = "${NEXUS_REGISTRY}/${comp}:${APP_VERSION}"
-                            echo "Building Production image with incremental tag: ${fullImageName} (NO latest tag)"
-                            dir("features/${comp}") {
-                                sh "docker build -t ${fullImageName} ."
-                                sh "docker push ${fullImageName}"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ----------------------------------------------------------------------
-        // STAGE 4: Zero-Downtime Production Rolling Update on Kubernetes
-        // ----------------------------------------------------------------------
-        stage('Production Kubernetes Rolling Update') {
+        stage('Deploy to PROD') {
             steps {
                 script {
-                    echo "Deploying production release ${APP_VERSION} to Kubernetes namespace: ${KUBE_NAMESPACE}"
 
-                    def allComponents = [
-                        'frontend': 'frontend',
-                        'user-service': 'user-service',
-                        'product-service': 'product-service',
-                        'order-service': 'order-service',
-                        'payment-service': 'payment-service',
-                        'notification-service': 'notification-service'
+                    def components = [
+                        'frontend',
+                        'user-service',
+                        'product-service',
+                        'order-service',
+                        'payment-service',
+                        'notification-service'
                     ]
 
-                    allComponents.each { folder, deployName ->
-                        def manifestPath = "kubernetes/microservices/${folder}/deployment.yaml"
-                        def fullImageName = "${NEXUS_REGISTRY}/${folder}:${APP_VERSION}"
+                    for (component in components) {
 
-                        echo "Rolling update: ${deployName} -> ${fullImageName}"
+                        def manifest = "kubernetes/microservices/${component}/deployment.yaml"
+                        def image = "${NEXUS_REGISTRY}/${component}/${ENVIRONMENT}:${BUILD_NUMBER}"
+
+                        echo "Deploying ${component} using ${image}"
+
                         sh """
-                            sed -i.bak 's|image: .*|image: ${fullImageName}|g' ${manifestPath}
-                            kubectl apply -f ${manifestPath} -n ${KUBE_NAMESPACE}
-                            kubectl rollout status deployment/${deployName} -n ${KUBE_NAMESPACE} --timeout=180s
+                            sed -i.bak \
+                                's|image: .*|image: ${image}|g' \
+                                ${manifest}
+
+                            kubectl apply \
+                                -f ${manifest} \
+                                -n ${KUBE_NAMESPACE}
+
+                            kubectl rollout status \
+                                deployment/${component} \
+                                -n ${KUBE_NAMESPACE} \
+                                --timeout=180s
                         """
                     }
                 }
@@ -145,12 +258,30 @@ pipeline {
     }
 
     post {
+
+        success {
+            slackSend(
+                channel: '#devopsupdates',
+                color: 'good',
+                message: "SUCCESS: Production release completed | Build #${BUILD_NUMBER} | frontend/prod:${BUILD_NUMBER} + backend services deployed to PROD"
+            )
+        }
+
+        failure {
+            slackSend(
+                channel: '#devopsupdates',
+                color: 'danger',
+                message: "FAILED: Production release | Build #${BUILD_NUMBER}"
+            )
+        }
+
         always {
             sh 'docker logout ${NEXUS_REGISTRY} || true'
-            cleanWs notFailBuild: true
-        }
-        success {
-            echo "Production Release v${APP_VERSION} deployed successfully with zero downtime!"
+
+            cleanWs(
+                deleteDirs: true,
+                notFailBuild: true
+            )
         }
     }
 }
