@@ -5,10 +5,13 @@ metadata:
   namespace: jenkins
   labels:
     app: jenkins-pod
+
 spec:
   serviceAccountName: jenkins-sa
+
   imagePullSecrets:
     - name: ghcr-secret
+
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
@@ -18,23 +21,23 @@ spec:
                 operator: In
                 values:
                   - wnode1
+
   securityContext:
     runAsUser: 0
     runAsGroup: 0
     fsGroup: 1000
-    fsGroupChangePolicy: OnRootMismatch
+
   containers:
     - name: jenkins-server
       image: ghcr.io/truelykh/jenkins:1.0
-      imagePullPolicy: IfNotPresent
+      env:
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
       ports:
         - containerPort: 8080
           name: admin
         - containerPort: 50000
           name: agent
-      env:
-        - name: DOCKER_HOST
-          value: tcp://localhost:2375
       resources:
         requests:
           cpu: 350m
@@ -45,15 +48,20 @@ spec:
       volumeMounts:
         - name: jenkins-data
           mountPath: /var/jenkins_home
+
     - name: docker
       image: docker:27-dind
       securityContext:
         privileged: true
       args:
         - --insecure-registry=nexus-svc.nexus.svc.cluster.local:8082
+        - --insecure-registry=192.168.41.20:8082
       env:
         - name: DOCKER_TLS_CERTDIR
           value: ""
+      ports:
+        - containerPort: 2375
+          name: docker
       resources:
         requests:
           cpu: 350m
@@ -61,9 +69,7 @@ spec:
         limits:
           cpu: 1000m
           memory: 1.5Gi
-      ports:
-        - containerPort: 2375
-          name: docker
+
   volumes:
     - name: jenkins-data
       persistentVolumeClaim:
