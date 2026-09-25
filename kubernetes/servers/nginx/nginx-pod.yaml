@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  namespace: nginx
+  labels:
+    app: nginx-pod
+spec:
+  serviceAccountName: nginx-sa
+  containers:
+    - name: nginx
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+          name: http
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+  volumes:
+    - name: nginx-config
+      configMap:
+        name: nginx-conf
+    - name: nginx-logs
+      persistentVolumeClaim:
+        claimName: nginx-pvc
+  restartPolicy: Always

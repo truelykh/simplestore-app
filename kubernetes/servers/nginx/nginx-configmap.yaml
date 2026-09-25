@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+  namespace: nginx
+  labels:
+    app.kubernetes.io/name: nginx
+data:
+  nginx.conf: |
+    events { worker_connections 1024; }
+    http {
+        upstream frontend_svc {
+            server frontend-svc.storeapp.svc.cluster.local:80;
+        }
+        upstream user_svc {
+            server user-svc.storeapp.svc.cluster.local:8080;
+        }
+        upstream product_svc {
+            server product-svc.storeapp.svc.cluster.local:8080;
+        }
+        upstream order_svc {
+            server order-svc.storeapp.svc.cluster.local:8080;
+        }
+        upstream payment_svc {
+            server payment-svc.storeapp.svc.cluster.local:8080;
+        }
+        upstream notification_svc {
+            server notification-svc.storeapp.svc.cluster.local:8080;
+        }
+
+        server {
+            listen 80;
+
+            # Frontend static UI
+            location / {
+                proxy_pass http://frontend_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            # Backend Microservices APIs
+            location /api/users {
+                proxy_pass http://user_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            location /api/products {
+                proxy_pass http://product_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            location /api/orders {
+                proxy_pass http://order_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            location /api/payments {
+                proxy_pass http://payment_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            location /api/notifications {
+                proxy_pass http://notification_svc;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+        }
+    }
