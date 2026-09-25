@@ -11,7 +11,7 @@ pipeline {
         APP_VERSION = "${BUILD_NUMBER}"
 
         NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
-        NEXUS_CRED_ID = 'nexus-credentials'
+        NEXUS_CRED_ID = 'nexus-admin-credentials'
 
         KUBE_NAMESPACE = 'dev'
 
@@ -20,12 +20,6 @@ pipeline {
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Build & Push Docker Image') {
             steps {
