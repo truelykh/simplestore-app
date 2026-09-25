@@ -10,7 +10,7 @@ pipeline {
         ENVIRONMENT = 'dev'
         APP_VERSION = "${BUILD_NUMBER}"
 
-        NEXUS_REGISTRY = 'nexus-svc.nexus.svc.cluster.local:8082'
+        NEXUS_REGISTRY = '192.168.41.20:8082'
         NEXUS_CRED_ID = 'nexus-admin-credentials'
 
         KUBE_NAMESPACE = 'dev'
@@ -80,7 +80,6 @@ pipeline {
     }
 
     post {
-
         success {
             slackSend(
                 channel: '#devopsupdates',
@@ -99,7 +98,6 @@ pipeline {
 
         always {
             sh 'docker logout ${NEXUS_REGISTRY} || true'
-
             cleanWs(
                 deleteDirs: true,
                 notFailBuild: true
