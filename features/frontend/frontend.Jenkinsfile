@@ -27,16 +27,6 @@ pipeline {
             }
         }
 
-        stage('Build Frontend') {
-            steps {
-                dir("features/${SERVICE_NAME}") {
-                    sh 'npm install'
-                    sh 'npm run build'
-                    sh 'test -d dist'
-                }
-            }
-        }
-
         stage('Build & Push Docker Image') {
             steps {
                 withCredentials([
