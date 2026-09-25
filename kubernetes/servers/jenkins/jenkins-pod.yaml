@@ -30,28 +30,12 @@ spec:
 
   containers:
     - name: jenkins-server
-      image: ghcr.io/truelykh/jenkins:1.0
+      image: ghcr.io/truelykh/jenkins:2.0
+      imagePullPolicy: Always
 
       env:
         - name: DOCKER_HOST
           value: tcp://localhost:2375
-
-      command:
-        - /bin/bash
-        - -c
-
-      args:
-        - |
-          apt-get update
-          apt-get install -y curl
-
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-
-          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-
-          rm -f kubectl
-
-          exec /usr/bin/tini -- /usr/local/bin/jenkins
 
       ports:
         - containerPort: 8080
